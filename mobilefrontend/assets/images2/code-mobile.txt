@@ -1,0 +1,1277 @@
+Screens > Admin > Tools.js -------------------------------------------------------
+
+import React, { useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  ActivityIndicator,
+  StyleSheet,
+  Dimensions,
+  Container,
+  Button,
+  RefreshControl,
+} from "react-native";
+import { Input, VStack, Heading, Box } from "native-base";
+import Icon from "react-native-vector-icons/FontAwesome";
+import { useFocusEffect } from "@react-navigation/native";
+import { Searchbar } from "react-native-paper";
+import ListItem from "./ListItem";
+
+import axios from "axios";
+import baseURL from "../../assets/common/baseUrl";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import EasyButton from "../../Shared/StyledComponents/EasyButtons";
+import { useNavigation } from "@react-navigation/native";
+
+var { height, width } = Dimensions.get("window");
+
+const ListHeader = () => {
+  return (
+    <View elevation={1} style={styles.listHeader}>
+      <View style={styles.headerItem}></View>
+      <View style={styles.headerItem}>
+        <Text style={{ fontWeight: "600" }}>Brand</Text>
+      </View>
+      <View style={styles.headerItem}>
+        <Text style={{ fontWeight: "600" }}>Name</Text>
+      </View>
+      <View style={styles.headerItem}>
+        <Text style={{ fontWeight: "600" }}>Category</Text>
+      </View>
+    </View>
+  );
+};
+
+const Tools = (props) => {
+  const [toolList, setToolList] = useState();
+  const [toolFilter, setToolFilter] = useState();
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState();
+  const [refreshing, setRefreshing] = useState(false);
+  const navigation = useNavigation();
+
+  const searchTool = (text) => {
+    if (text === "") {
+      setToolFilter(toolList);
+    }
+    setToolFilter(
+      toolList.filter((i) =>
+        i.name.toLowerCase().includes(text.toLowerCase())
+      )
+    );
+  };
+
+  const deleteTool = (id) => {
+    axios
+      .delete(`${baseURL}tools/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((res) => {
+        const tools = toolFilter.filter((item) => item.id !== id);
+        setToolFilter(tools);
+      })
+      .catch((error) => console.log(error));
+  };
+  
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      axios.get(`${baseURL}tools`).then((res) => {
+        // console.log(res.data)
+        setToolList(res.data);
+        setToolFilter(res.data);
+        setLoading(false);
+      });
+      setRefreshing(false);
+    }, 2000);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Get Token
+      AsyncStorage.getItem("jwt")
+        .then((res) => {
+          setToken(res);
+        })
+        .catch((error) => console.log(error));
+
+      axios.get(`${baseURL}tools`).then((res) => {
+        console.log(res.data);
+        setToolList(res.data);
+        setToolFilter(res.data);
+        setLoading(false);
+      });
+
+      return () => {
+        setToolList();
+        setToolFilter();
+        setLoading(true);
+      };
+    }, [])
+  );
+
+  return (
+    <Box flex={1}>
+      <View style={styles.buttonContainer}>
+
+        {/* <EasyButton
+          secondary
+          medium
+          onPress={() => navigation.navigate("Orders")}
+        >
+          <Icon name="shopping-bag" size={18} color="white" />
+          <Text style={styles.buttonText}>Orders</Text>
+        </EasyButton> */}
+
+        <EasyButton
+          secondary
+          medium
+          onPress={() => navigation.navigate("ProductForm")}
+        >
+          <Icon name="plus" size={18} color="white" />
+          <Text style={styles.buttonText}>tools</Text>
+        </EasyButton>
+
+        {/* <EasyButton
+          secondary
+          medium
+          onPress={() => navigation.navigate("Categories")}
+        >
+          <Icon name="plus" size={18} color="white" />
+          <Text style={styles.buttonText}>Categories</Text>
+        </EasyButton> */}
+        
+      </View>
+      <Searchbar
+        width="80%"
+        placeholder="Search"
+        onChangeText={(text) => searchTool(text)}
+        //   value={searchQuery}
+      />
+      {loading ? (
+        <View style={styles.spinner}>
+          <ActivityIndicator size="large" color="red" />
+        </View>
+      ) : (
+        <FlatList
+          data={toolFilter}
+          ListHeaderComponent={ListHeader}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          renderItem={({ item, index }) => (
+            <ListItem item={item} index={index} deleteTool={deleteTool} />
+          )}
+          keyExtractor={(item) => item.id}
+        />
+      )}
+    </Box>
+  );
+};
+
+const styles = StyleSheet.create({
+  listHeader: {
+    flexDirection: "row",
+    padding: 5,
+    backgroundColor: "gainsboro",
+  },
+  headerItem: {
+    margin: 3,
+    width: width / 6,
+  },
+  spinner: {
+    height: height / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  container: {
+    marginBottom: 160,
+    backgroundColor: "white",
+  },
+  buttonContainer: {
+    margin: 20,
+    alignSelf: "center",
+    flexDirection: "row",
+  },
+  buttonText: {
+    marginLeft: 4,
+    color: "white",
+  },
+});
+
+export default Tools;
+
+
+----------------------------------------------------------------
+
+Screens > Admin > ListItem.js -------------------------------------------------------
+
+import React, { useState } from "react";
+import {
+  View,
+  StyleSheet,
+  Text,
+  Image,
+  TouchableHighLight,
+  TouchableOpacity,
+  Dimensions,
+  Button,
+  Modal,
+} from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
+import { useNavigation } from "@react-navigation/native";
+import EasyButton from "../../Shared/StyledComponents/EasyButtons";
+
+var { width } = Dimensions.get("window");
+
+const ListItem = ({ item, index, deleteTool }) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  let navigation = useNavigation();
+
+  console.log(item);
+
+  return (
+    <View>
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => {
+          setModalVisible(false);
+        }}
+      >
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <TouchableOpacity
+              underlayColor="#E8E8E8"
+              onPress={() => {
+                setModalVisible(false);
+              }}
+              style={{
+                alignSelf: "flex-end",
+                position: "absolute",
+                top: 5,
+                right: 10,
+              }}
+            >
+              <Icon name="close" size={20} />
+            </TouchableOpacity>
+
+            <EasyButton
+              medium
+              secondary
+              onPress={() => [
+                navigation.navigate("ProductForm", { item }),
+                setModalVisible(false),
+              ]}
+              title="Edit"
+            >
+              <Text style={styles.textStyle}>Edit</Text>
+            </EasyButton>
+            <EasyButton
+              medium
+              danger
+              onPress={() => [deleteTool(item._id), setModalVisible(false)]}
+              title="delete"
+            >
+              <Text style={styles.textStyle}>Delete</Text>
+            </EasyButton>
+          </View>
+        </View>
+      </Modal>
+
+      <TouchableOpacity
+        onPress={() => {
+          navigation.navigate("Product Detail", { item });
+        }}
+        onLongPress={() => setModalVisible(true)}
+        style={[
+          styles.container,
+          {
+            backgroundColor: index % 2 == 0 ? "white" : "gainsboro",
+          },
+        ]}
+      >
+        <Image
+          source={{
+            uri: item.image
+              ? item.image
+              : "https://cdn.pixabay.com/photo/2012/04/01/17/29/box-23649_960_720.png",
+          }}
+          resizeMode="contain"
+          style={styles.image}
+        />
+        <Text style={styles.item}>{item.brand}</Text>
+        <Text style={styles.item} numberOfLines={1} ellipsizeMode="tail">
+          {item.name}
+        </Text>
+        {item.category ? (
+          <Text style={styles.item} numberOfLines={1} ellipsizeMode="tail">
+            {item.category.name}
+          </Text>
+        ) : null}
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    padding: 5,
+    width: width,
+  },
+  image: {
+    borderRadius: 50,
+    width: width / 6,
+    height: 20,
+    margin: 2,
+  },
+  item: {
+    flexWrap: "wrap",
+    margin: 3,
+    width: width / 6,
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 22,
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 35,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  textStyle: {
+    color: "white",
+    fontWeight: "bold",
+  },
+});
+
+export default ListItem;
+
+----------------------------------------------------------------
+
+Screens > Admin > ToolForm.js -------------------------------------------------------
+
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+} from "react-native";
+import { Item, Picker, Select, Box } from "native-base";
+import FormContainer from "../../Shared/Form/FormContainer";
+import Input from "../../Shared/Form/Input";
+import EasyButton from "../../Shared/StyledComponents/EasyButtons";
+
+import Icon from "react-native-vector-icons/FontAwesome";
+import Toast from "react-native-toast-message";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import baseURL from "../../assets/common/baseUrl";
+import Error from "../../Shared/Error";
+import axios from "axios";
+import * as ImagePicker from "expo-image-picker";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import mime from "mime";
+
+const ToolForm = (props) => {
+  const [pickerValue, setPickerValue] = useState("");
+  const [brand, setBrand] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [image, setImage] = useState("");
+  const [mainImage, setMainImage] = useState();
+  const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [token, setToken] = useState();
+  const [error, setError] = useState();
+  const [countInStock, setCountInStock] = useState("");
+  const [rating, setRating] = useState(0);
+  const [isFeatured, setIsFeature] = useState(false);
+  const [numReviews, setNumReviews] = useState(0);
+  const [type, setType] = useState(""); // New state for type
+  const [item, setItem] = useState(null);
+
+  let navigation = useNavigation();
+
+  useEffect(() => {
+    if (!props.route.params) {
+      setItem(null);
+    } else {
+      setItem(props.route.params.item);
+      setBrand(props.route.params.item.brand);
+      setName(props.route.params.item.name);
+      setDescription(props.route.params.item.description);
+      setMainImage(props.route.params.item.image);
+      setImage(props.route.params.item.image);
+      setCategory(props.route.params.item.category._id);
+      setPickerValue(props.route.params.item.category._id);
+      setCountInStock(props.route.params.item.countInStock.toString());
+    }
+    AsyncStorage.getItem("jwt")
+      .then((res) => {
+        setToken(res);
+      })
+      .catch((error) => console.log(error));
+    axios
+      .get(`${baseURL}categories`)
+      .then((res) => setCategories(res.data))
+      .catch((error) => alert("Error loading categories"));
+    (async () => {
+      if (Platform.OS !== "web") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          alert("Sorry, we need camera roll permissions to make this work!");
+        }
+      }
+    })();
+    return () => {
+      setCategories([]);
+    };
+  }, []);
+
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setMainImage(result.assets[0].uri);
+      setImage(result.assets[0].uri);
+    }
+  };
+
+  const addProduct = () => {
+    if (
+      name === "" ||
+      brand === "" ||
+      description === "" ||
+      category === "" ||
+      countInStock === "" ||
+      type === "" // Validate type
+    ) {
+      setError("Please fill in the form correctly");
+      return;
+    }
+
+    let formData = new FormData();
+    const newImageUri = "file:///" + image.split("file:/").join("");
+
+    formData.append("name", name);
+    formData.append("brand", brand);
+    formData.append("description", description);
+    formData.append("category", category);
+    formData.append("countInStock", countInStock);
+    formData.append("rating", rating);
+    formData.append("numReviews", numReviews);
+    formData.append("isFeatured", isFeatured);
+    formData.append("type", type); // Add type to formData
+    formData.append("image", {
+      uri: newImageUri,
+      type: mime.getType(newImageUri),
+      name: newImageUri.split("/").pop(),
+    });
+
+
+    const config = {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: `Bearer ${token}`,
+      },
+    };
+    
+    if (item !== null) {
+    console.log(formData, 'formData')
+
+      axios
+        .put(`${baseURL}tools/${item.id}`, formData, config)
+        .then((res) => {
+
+          if (res.status === 200 || res.status === 201) {
+            Toast.show({
+              topOffset: 60,
+              type: "success",
+              text1: "Tools successfully updated",
+              text2: "",
+            });
+            setTimeout(() => {
+              navigation.navigate("Tools");
+            }, 500);
+          }
+        })
+        .catch((error) => {
+          Toast.show({
+            topOffset: 60,
+            type: "error",
+            text1: "Something went wasdrong",
+            text2: "Please try againasd",
+          });
+        });
+    } else {
+        
+      axios
+        .post(`${baseURL}tools`, formData, config)
+        .then((res) => {
+
+          if (res.status === 200 || res.status === 201) {
+            Toast.show({
+              topOffset: 60,
+              type: "success",
+              text1: "New Tool added",
+              text2: "",
+            });
+            setTimeout(() => {
+              navigation.navigate("Tools");
+            }, 500);
+          }
+        })
+        .catch((error) => {
+          console.log(error);
+          Toast.show({
+            topOffset: 60,
+            type: "error",
+            text1: "Something went wasdasdrong",
+            text2: "Please try again",
+          });
+        });
+    }
+  };
+
+  return (
+    <FormContainer title="Add Product">
+      <View style={styles.imageContainer}>
+        <Image style={styles.image} source={{ uri: mainImage }} />
+        <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
+          <Icon style={{ color: "white" }} name="camera" />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.label}>
+        <Text style={{ textDecorationLine: "underline" }}>Brand</Text>
+      </View>
+      <Input
+        placeholder="Brand"
+        name="brand"
+        id="brand"
+        value={brand}
+        onChangeText={(text) => setBrand(text)}
+      />
+      <View style={styles.label}>
+        <Text style={{ textDecorationLine: "underline" }}>Name</Text>
+      </View>
+      <Input
+        placeholder="Name"
+        name="name"
+        id="name"
+        value={name}
+        onChangeText={(text) => setName(text)}
+      />
+      <View style={styles.label}>
+        <Text style={{ textDecorationLine: "underline" }}>Count in Stock</Text>
+      </View>
+      <Input
+        placeholder="Stock"
+        name="stock"
+        id="stock"
+        value={countInStock}
+        keyboardType={"numeric"}
+        onChangeText={(text) => setCountInStock(text)}
+      />
+      <View style={styles.label}>
+        <Text style={{ textDecorationLine: "underline" }}>Type</Text>
+      </View>
+      <Box>
+        <Select
+          minWidth="90%"
+          placeholder="Select Type"
+          selectedValue={type}
+          onValueChange={(value) => setType(value)}
+        >
+          <Select.Item label="Small" value="small" />
+          <Select.Item label="Big" value="big" />
+        </Select>
+      </Box>
+      <View style={styles.label}>
+        <Text style={{ textDecorationLine: "underline" }}>Description</Text>
+      </View>
+      <Input
+        placeholder="Description"
+        name="description"
+        id="description"
+        value={description}
+        onChangeText={(text) => setDescription(text)}
+      />
+      <Box>
+        <Select
+          minWidth="90%"
+          placeholder="Select your Category"
+          selectedValue={pickerValue}
+          onValueChange={(e) => [setPickerValue(e), setCategory(e)]}
+        >
+          {categories.map((c, index) => {
+            return <Select.Item key={c.id} label={c.name} value={c.id} />;
+          })}
+        </Select>
+      </Box>
+      {error ? <Error message={error} /> : null}
+      <View style={styles.buttonContainer}>
+        <EasyButton large primary onPress={() => addProduct()}>
+          <Text style={styles.buttonText}>Confirm</Text>
+        </EasyButton>
+      </View>
+    </FormContainer>
+  );
+};
+
+const styles = StyleSheet.create({
+  label: {
+    width: "80%",
+    marginTop: 10,
+  },
+  buttonContainer: {
+    width: "80%",
+    marginBottom: 80,
+    marginTop: 20,
+    alignItems: "center",
+  },
+  buttonText: {
+    color: "white",
+  },
+  imageContainer: {
+    width: 200,
+    height: 200,
+    borderStyle: "solid",
+    borderWidth: 8,
+    padding: 0,
+    justifyContent: "center",
+    borderRadius: 100,
+    borderColor: "#E0E0E0",
+    elevation: 10,
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 100,
+  },
+  imagePicker: {
+    position: "absolute",
+    right: 5,
+    bottom: 5,
+    backgroundColor: "grey",
+    padding: 8,
+    borderRadius: 100,
+    elevation: 20,
+  },
+});
+
+export default ToolForm;
+
+
+----------------------------------------------------------------
+
+
+Screens > User > Borrow.js =====================================
+
+import { Input, Text, View, List, ListItem, Content, Button } from "native-base";
+import React, { useState, useCallback } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import axios from "axios";
+import baseURL from "../../assets/common/baseUrl";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const Borrow = (props) => {
+  const [user, setUser] = useState(props.route.params.user);
+  const [borrowList, setBorrowList] = useState([]);
+  const [token, setToken] = useState();
+
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem("jwt")
+        .then((res) => {
+          axios
+            .get(`${baseURL}borrows/get/userborrows/${user._id}`, {
+              headers: { Authorization: `Bearer ${res}` },
+            })
+            .then((res) => {
+              setBorrowList(res.data);
+            })
+            .catch((error) => console.log(error));
+        })
+        .catch((error) => console.log(error));
+
+      return () => {
+        setBorrowList([]);
+      };
+    }, [user._id])
+  );
+
+  const handleStatusChange = (borrowId, newStatus) => {
+    // Update the status in the backend
+    AsyncStorage.getItem("jwt")
+      .then((res) => {
+        axios
+          .put(
+            `${baseURL}borrows/update-status/${borrowId}`,
+            { status: newStatus, dateReturned: Date.now() },
+            {
+              headers: { Authorization: `Bearer ${res}` },
+            }
+          )
+          .then((res) => {
+            // Update the local state with the new status
+            setBorrowList((prevList) =>
+              prevList.map((item) =>
+                item.id === borrowId ? { ...item, status: newStatus, dateReturned: Date() } : item
+              )
+            );
+          })
+          .catch((error) => console.log(error));
+      })
+      .catch((error) => console.log(error));
+  };
+
+  return (
+    <View>
+      <Text>List of Borrow Items</Text>
+
+      {borrowList.map((borrowList, index) => (
+        <View key={index} style={styles.card}>
+          <Text>Tool Name: {borrowList.borrowItems[0].tool.name || ""}</Text>
+          <Text>Quantity: {borrowList.borrowItems[0].quantity|| "" }</Text>
+          <Text>Status: {borrowList.status || ""}</Text>
+          <Text>Date Borrowed: {borrowList.dateBorrowed || ""}</Text>
+          <Text>Date Returned: {borrowList.dateReturned || "Not Returned"}</Text>
+          <Button onPress={() => handleStatusChange(borrowList.id, "Returned")}>
+            Return Item
+          </Button>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const styles = {
+  card: {
+    marginBottom: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 5,
+    backgroundColor: "#fff",
+    elevation: 2,
+  },
+};
+
+export default Borrow;
+
+==================================================================
+
+
+Screens > User > UserProfile.js =====================================
+
+import React, { useContext, useState, useCallback } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { Container } from "native-base";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import baseURL from "../../assets/common/baseUrl";
+import AuthGlobal from "../../Context/Store/AuthGlobal";
+import { logoutUser } from "../../Context/Actions/Auth.actions";
+
+// Custom Design
+import Header from "../../Components/Header";
+import Button from "../../Components/Button";
+
+const UserProfile = (props) => {
+  const context = useContext(AuthGlobal);
+  const [userProfile, setUserProfile] = useState("");
+  const navigation = useNavigation();
+  const [userImage, setUserImage] = useState("");
+
+  useFocusEffect(
+    useCallback(() => {
+      if (
+        context.stateUser.isAuthenticated === false ||
+        context.stateUser.isAuthenticated === null
+      ) {
+        navigation.navigate("Login");
+      }
+
+      AsyncStorage.getItem("jwt")
+        .then((res) => {
+          axios
+            .get(`${baseURL}users/${context.stateUser.user.userId}`, {
+              headers: { Authorization: `Bearer ${res}` },
+            })
+            .then((user) => {
+              setUserProfile(user.data);
+              setUserImage(user.data.image);
+            });
+        })
+        .catch((error) => console.log(error));
+
+      return () => {
+        setUserProfile();
+        setUserImage("");
+      };
+    }, [context.stateUser.isAuthenticated])
+  );
+
+  return (
+    <Container style={styles.container}>
+      <View style={styles.centeredContainer}>
+        <View style={styles.profileContainer}>
+          <View style={styles.imageContainer}>
+            <Image
+              source={{
+                uri: userImage
+                  ? userImage
+                  : "https://via.placeholder.com/200", // Placeholder image if userImage is not available
+              }}
+              style={styles.profileImage}
+            />
+          </View>
+          <View style={styles.details}>
+            <Text style={styles.nameText}>
+              {userProfile ? userProfile.firstname : ""}{" "}
+              {userProfile ? userProfile.lastname : ""}
+            </Text>
+            <Text style={styles.emailText}>
+              {userProfile ? userProfile.email : ""}
+            </Text>
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.button, styles.editProfileButton]}
+              onPress={() =>
+                navigation.navigate("UserUpdate", { user: userProfile })
+              }
+            >
+              <Button mode="outlined" style={styles.buttonText}>
+                Edit Profile
+              </Button>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity
+           onPress={() =>
+            navigation.navigate("Borrow", { user: userProfile })
+          }
+          style={styles.logoutButton}
+        >
+          <Button mode="outlined" style={styles.buttonText}>
+            Borrow Items
+          </Button>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => [
+            AsyncStorage.removeItem("jwt"),
+            logoutUser(context.dispatch),
+          ]}
+          style={styles.logoutButton}
+        >
+          <Button mode="outlined" style={styles.buttonText}>
+            Logout
+          </Button>
+        </TouchableOpacity>
+      </View>
+    </Container>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f2f2f2",
+    padding: 20,
+  },
+  centeredContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileContainer: {
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  profileImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+  },
+  details: {
+    alignItems: "center",
+    marginTop: 20,
+  },
+  nameText: {
+    textAlign: "center",
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+  emailText: {
+    textAlign: "center",
+    fontSize: 16,
+    color: "#666",
+    marginBottom: 10,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  button: {
+    borderRadius: 10,
+  },
+  buttonText: {
+    fontSize: 16,
+  },
+  editProfileButton: {
+    backgroundColor: "#ff5c5c",
+    paddingHorizontal: 20,
+  },
+  logoutButton: {
+    marginTop: 20,
+  },
+});
+
+export default UserProfile;
+
+==================================================================
+
+Navigators > Main.js ===================================
+
+import React, { useContext } from "react";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { View } from "react-native";
+
+import Icon from "react-native-vector-icons/FontAwesome";
+import CartIcon from "../Shared/CartIcon";
+
+import HomeNavigator from "./HomeNavigator";
+import UserNavigator from "./UserNavigator";
+import CartNavigator from "./CartNavigator";
+import AdminNavigator from "./AdminNavigator";
+
+import AuthGlobal from "../Context/Store/AuthGlobal";
+
+const Tab = createBottomTabNavigator();
+
+const Main = () => {
+  const context = useContext(AuthGlobal);
+  return (
+    <Tab.Navigator
+      initialRouteName="Home"
+      screenOptions={{
+        tabBarHideOnKeyboard: true,
+        tabBarShowLabel: false,
+        tabBarActiveTintColor: "#343232",
+      }}
+    >
+      <Tab.Screen
+        name="Home"
+        component={HomeNavigator}
+        options={{
+          tabBarIcon: ({ color }) => {
+            return (
+              <Icon
+                name="home"
+                style={{ position: "relative" }}
+                color={color}
+                size={30}
+              />
+            );
+          },
+        }}
+      />
+
+      <Tab.Screen
+        name="Cart"
+        component={CartNavigator}
+        options={{
+          tabBarIcon: ({ color }) => {
+            return (
+              <>
+                <Icon
+                  name="shopping-cart"
+                  style={{ position: "relative" }}
+                  color={color}
+                  size={30}
+                />
+                <CartIcon />
+              </>
+            );
+          },
+        }}
+      />
+
+      <Tab.Screen
+        name="Admin"
+        component={AdminNavigator}
+        options={{
+          tabBarIcon: ({ color }) => {
+            return (
+              <Icon
+                name="cog"
+                style={{ position: "relative" }}
+                color={color}
+                size={30}
+              />
+            );
+          },
+        }}
+      />
+
+      <Tab.Screen
+        name="User"
+        component={UserNavigator}
+        options={{
+          tabBarIcon: ({ color }) => {
+            return (
+              <Icon
+                name="user"
+                style={{ position: "relative" }}
+                color={color}
+                size={30}
+              />
+            );
+          },
+        }}
+      />
+    </Tab.Navigator>
+  );
+};
+export default Main;
+
+
+==================================================================
+
+Navigators > AdminNavigator.js ===================================
+
+import React from "react"
+import { createStackNavigator } from "@react-navigation/stack"
+
+import Tools from "../Screens/Admin/Tools"
+import ToolForm from "../Screens/Admin/ToolForm"
+
+const Stack = createStackNavigator();
+
+function MyStack() {
+    return (
+        <Stack.Navigator>
+            <Stack.Screen 
+                name="Tools"
+                component={Tools}
+                options={{
+                    title: "Tool Form"
+                }}
+            />
+            <Stack.Screen name="ProductForm" component={ToolForm} />
+        </Stack.Navigator>
+    )
+}
+export default function AdminNavigator() {
+    return <MyStack />
+}
+
+==================================================================
+
+Backend > Routes > borrow.js ===================================
+
+const { Borrow } = require("../models/borrow");
+const { Tool } = require("../models/tool");
+const express = require("express");
+const { BorrowItem } = require("../models/borrow-item");
+const router = express.Router();
+
+router.get(`/`, async (req, res) => {
+  const borrowList = await Borrow.find()
+    .populate("user", "name")
+    .sort({ dateBorrowed: -1 });
+
+  if (!borrowList) {
+    res.status(500).json({ success: false });
+  }
+
+  res.status(201).json(borrowList);
+});
+
+router.get(`/:id`, async (req, res) => {
+  const borrow = await Borrow.findById(req.params.id)
+    .populate("user", "name")
+    .populate({
+      path: "borrowItems",
+      populate: {
+        path: "tool",
+        populate: "category",
+      },
+    });
+
+  if (!borrow) {
+    res.status(500).json({ success: false });
+  }
+  res.send(borrow);
+});
+
+router.post("/", async (req, res) => {
+  const borrowItemsIds = Promise.all(
+    req.body.borrowItems.map(async (borrowItem) => {
+      console.log(req.body);
+      let newBorrowItem = new BorrowItem({
+        quantity: borrowItem.quantity,
+        tool: borrowItem.id,
+      });
+
+      const tool = await Tool.findById(borrowItem.id);
+
+      if (tool) {
+        tool.countInStock -= borrowItem.quantity;
+        await tool.save();
+      }
+      newBorrowItem = await newBorrowItem.save();
+
+      return newBorrowItem._id;
+    })
+  );
+  console.log(borrowItemsIds);
+  const borrowItemsIdsResolved = await borrowItemsIds;
+  console.log(borrowItemsIds);
+
+  let borrow = new Borrow({
+    borrowItems: borrowItemsIdsResolved,
+    status: req.body.status,
+    user: req.body.user,
+    dateBorrowed: req.body.dateBorrowed,
+  });
+  borrow = await borrow.save();
+
+  if (!borrow) return res.status(400).send("The borrow cannot be created!");
+
+  res.send(borrow);
+});
+
+router.put("/:id", async (req, res) => {
+  const borrow = await Borrow.findByIdAndUpdate(
+    req.params.id,
+    {
+      status: req.body.status,
+    },
+    { new: true }
+  );
+
+  if (!borrow) return res.status(400).send("the Borrow cannot be update!");
+
+  res.send(borrow);
+});
+
+router.delete("/:id", (req, res) => {
+  Borrow.findByIdAndRemove(req.params.id)
+    .then(async (borrow) => {
+      if (borrow) {
+        await borrow.borrowItems.map(async (borrowItem) => {
+          await BorrowItem.findByIdAndRemove(borrowItem);
+        });
+        return res
+          .status(200)
+          .json({ success: true, message: "the borrow is deleted!" });
+      } else {
+        return res
+          .status(404)
+          .json({ success: false, message: "borrow not found!" });
+      }
+    })
+    .catch((err) => {
+      return res.status(500).json({ success: false, error: err });
+    });
+});
+
+router.get(`/get/count`, async (req, res) => {
+  const borrowCount = await Borrow.countDocuments((borrow) => borrow);
+
+  if (!borrowCount) {
+    res.status(500).json({ success: false });
+  }
+  res.send({
+    borrowCount: borrowCount,
+  });
+});
+
+router.get(`/get/userborrows/:userid`, async (req, res) => {
+  const userBorrowList = await Borrow.find({ user: req.params.userid })
+    .populate({
+      path: "borrowItems",
+      populate: {
+        path: "tool",
+        populate: "category",
+      },
+    })
+    .sort({ dateBorrowed: -1 });
+
+  if (!userBorrowList) {
+    res.status(500).json({ success: false });
+  }
+  res.send(userBorrowList);
+});
+
+router.put("/update-status/:id", async (req, res) => {
+    try {
+      console.log(req.body.dateReturned);
+
+      const updatedBorrow = await Borrow.findByIdAndUpdate(
+        req.params.id,
+        { 
+          status: "Returned",
+          dateReturned: Date()  // Include dateReturned in the update
+        },
+        { new: true }
+      );
+  
+      if (!updatedBorrow) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Borrow not found" });
+      }
+  
+      res.json(updatedBorrow);
+    } catch (error) {
+      console.error("Error updating borrow status:", error);
+      res.status(500).json({ success: false, error: "Internal Server Error" });
+    }
+  });
+  
+
+module.exports = router;
+
+
+==================================================================
+
